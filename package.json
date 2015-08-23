@@ -1,0 +1,9 @@
+{
+  "name": "daily-storage-reports",
+  "version": "1.0.0",
+  "devDependencies": {
+    "eslint": "0.23.0",
+    "jshint": "2.8.0",
+    "jasmine": "2.3.0"
+  }
+}

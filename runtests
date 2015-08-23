@@ -1,0 +1,10 @@
+#!/bin/bash
+
+function error()
+{
+    echo -e "\n\n\n\tERROR: Please fix the errors shown above and rerun- check the output above\n\n\n"
+    exit 1
+}
+
+nosetests || error
+./node_modules/jasmine/bin/jasmine.js || error
