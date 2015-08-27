@@ -1,0 +1,4 @@
+q*.txt
+node_modules/*
+*.pyc
+.DS_Store
