@@ -39,7 +39,7 @@ DEST                                dest path for copy.  If not specified, lists
                                         (defaults to 8000)
 [-t] number                         (Integer) number of threads to create to parallelize the list of files
                                         (defaults to 1)
-[-d]                                debug mode; show file sizes along with files in the lists
+[-d]                                debug mode; shopwdw file sizes along with files in the lists
 -h | --help                         Print out the script usage/help
 === Examples:
 - Run the script against the localhost, single thread
@@ -127,7 +127,7 @@ class QumuloFilesCommand(object):
         parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on sync source to use for sync")
         parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login")
         parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login")
-        parser.add_argument("-b", "--buckets", type=int, default=2, dest="buckets", required=False, help="specify number of threads/workers for sync")
+        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of threads/workers for sync")
         parser.add_argument("-v", "--verbose", required=False, dest="verbose", help="Echo stuff to ", action="store_true")
         parser.add_argument("start_path", action="store", help="This is the root path on the cluster for syn")
 
