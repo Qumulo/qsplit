@@ -37,14 +37,14 @@ DEST                                dest path for copy.  If not specified, lists
                                         (defaults to 'admin')
 [-P | --port] number                Use 'number' for the API server port
                                         (defaults to 8000)
-[-t] number                         (Integer) number of threads to create to parallelize the list of files
+[-b | --buckets] buckets                        (Integer) number of buckets to create to parallelize the list of files
                                         (defaults to 1)
 [-d]                                debug mode; shopwdw file sizes along with files in the lists
 -h | --help                         Print out the script usage/help
 === Examples:
-- Run the script against the localhost, single thread
+- Run the script against the localhost, single bucket
 qfiles.py --host music
-- Run against host music, 12 threads
+- Run against host music, 12 buckets
 qfiles.py --host music -t 12
 '''
 
@@ -53,6 +53,8 @@ import argparse
 import datetime
 import sys
 import os
+
+import arrow
 
 # Import Qumulo REST libraries
 # Leaving in the 'magic file path' for customers who want to run these scripts
@@ -127,8 +129,9 @@ class QumuloFilesCommand(object):
         parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on sync source to use for sync")
         parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login")
         parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login")
-        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of threads/workers for sync")
+        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of buckets")
         parser.add_argument("-v", "--verbose", required=False, dest="verbose", help="Echo stuff to ", action="store_true")
+        parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")
         parser.add_argument("start_path", action="store", help="This is the root path on the cluster for syn")
 
 
@@ -140,6 +143,10 @@ class QumuloFilesCommand(object):
         self.num_buckets = args.buckets
         self.verbose = args.verbose
         self.start_path = args.start_path
+        if args.since is not None:
+            self.since = self.since = arrow.get(args.since)
+        else:
+            self.since = None
 
         self.connection = None
         self.credentials = None
@@ -190,13 +197,15 @@ class QumuloFilesCommand(object):
 
     def process_buckets(self):
         i = 1
+
         for bucket in self.buckets:
 
-            bucket.save(i, len(self.start_path))
+            if len(bucket.entries) > 0:
+                bucket.save(i, len(self.start_path))
 
-            if self.verbose:
-                print "--------Dumping Bucket: " + str(i) + "-------------"
-                bucket.print_contents()
+                if self.verbose:
+                    print "--------Dumping Bucket: " + str(i) + "-------------"
+                    bucket.print_contents()
 
             i += 1
 
@@ -214,8 +223,19 @@ class QumuloFilesCommand(object):
 
         response = fs.read_entire_directory(self.connection, self.credentials,
                                             page_size=5000, path=path)
+
+        nodes = None
+
         for r in response:
-            self.process_folder_contents(r.data['files'], path)
+
+            if self.since is not None:
+                # 'change_time' instead of 'max_ctime'
+                nodes = [n for n in r.data['files'] if arrow.get(str(n['change_time'])) >= self.since]
+            else:
+                nodes = r.data['files']
+
+            if nodes:
+                self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
 
@@ -254,11 +274,6 @@ def main():
     command = QumuloFilesCommand(sys.argv)
     command.process_folder(command.start_path)
     command.process_buckets()
-
-
-
-
-
 
 # Main
 if __name__ == '__main__':
