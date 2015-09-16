@@ -223,16 +223,17 @@ class QumuloFilesCommand(object):
 
         response = fs.read_entire_directory(self.connection, self.credentials,
                                             page_size=5000, path=path)
-
         nodes = None
 
-        for r in response:
+        responses = [ r for r in response ]
+
+        for r in responses:
 
             if self.since is not None:
                 # 'change_time' instead of 'max_ctime'
-                nodes = [n for n in r.data['files'] if arrow.get(str(n['change_time'])) >= self.since]
+                nodes = [n for n in r['files'] if arrow.get(str(n['change_time'])) >= self.since]
             else:
-                nodes = r.data['files']
+                nodes = r['files']
 
             if nodes:
                 self.process_folder_contents(nodes, path)
