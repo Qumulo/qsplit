@@ -4,6 +4,15 @@ The qsplit utility supports two use cases:
 Optimized Migration using dir aggregates/REST API
 Replication using max_ctime via REST API
 
+**NOTE**: At present, we cannot provide a guarantee to users that replication based on max_ctime will pick up all changed files that are due for replication; this is due to how we currently propogate metadata about filesystem changes.  This will be addressed in a subsequent release but at present we do not recommend depending up on max_ctime values for replication sceanrios, so the 
+
+    --since
+
+parameter in this sample will be removed until the issue
+has been addressed in our product and REEST API.  ***
+  
+This python sample will use the read_dir_aggregates API to build a list of paths (in ~ logn time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  It could also easily be adapted to build a file list for RoboCopy in Windows environments.
+
   
 This python sample will use the read_dir_aggregates API to build a list of paths (in ~ logn time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  It could also easily be adapted to build a file list for RoboCopy in Windows environments.
 
