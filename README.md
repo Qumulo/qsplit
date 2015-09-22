@@ -9,7 +9,7 @@ Replication using max_ctime via REST API
     --since
 
 parameter in this sample will be removed until the issue
-has been addressed in our product and REEST API.  ***
+has been addressed in our product and REST API.  ***
   
 This python sample will use the read_dir_aggregates API to build a list of paths (in ~ logn time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  It could also easily be adapted to build a file list for RoboCopy in Windows environments.
 
