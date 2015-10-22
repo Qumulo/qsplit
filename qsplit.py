@@ -22,30 +22,7 @@ The partitioning is based on the block count, which is obtained from
 fs_read_dir_aggregates
 - feed each partition to an rsync client
 == Typical Script Usage:
-qfiles.py --host ip_address|hostname [options] SRC DEST
-=== Required:
-[-i | --ip | --host] ip|hostname    An ip address or hostname of a node in
-                                        the cluster; use 'localhost' when
-                                        running directly on the node.
-                                        (Defaults to 'localhost')
-SRC                                 source path for copy
-=== Options:
-DEST                                dest path for copy.  If not specified, lists source files
-[-u | --user] username              Use 'username' for authentication
-                                        (defaults to 'admin')
-[-p | --passwd] password            Use 'password' for authentication
-                                        (defaults to 'admin')
-[-P | --port] number                Use 'number' for the API server port
-                                        (defaults to 8000)
-[-t] number                         (Integer) number of threads to create to parallelize the list of files
-                                        (defaults to 1)
-[-d]                                debug mode; shopwdw file sizes along with files in the lists
--h | --help                         Print out the script usage/help
-=== Examples:
-- Run the script against the localhost, single thread
-qfiles.py --host music
-- Run against host music, 12 threads
-qfiles.py --host music -t 12
+qfiles.py --host ip_address|hostname [options] path
 '''
 
 # Import python libraries
@@ -123,13 +100,13 @@ class QumuloFilesCommand(object):
     def __init__(self, argv=None):
 
         parser = argparse.ArgumentParser()
-        parser.add_argument("--ip", "--host", default="music", dest="host", required=False,  help="specify host for sync source")
-        parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on sync source to use for sync")
-        parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login")
-        parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login")
-        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of threads/workers for sync")
-        parser.add_argument("-v", "--verbose", required=False, dest="verbose", help="Echo stuff to ", action="store_true")
-        parser.add_argument("start_path", action="store", help="This is the root path on the cluster for syn")
+        parser.add_argument("--ip", "--host", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
+        parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
+        parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
+        parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
+        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
+        parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
+        parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
 
 
         args = parser.parse_args()
@@ -145,16 +122,12 @@ class QumuloFilesCommand(object):
         self.credentials = None
 
         self.login()
-        # self.start_path = "/music/"
-        # self.start_path = "/nfstest/"
         self.total_size = self.get_directory_size(self.start_path)
         self.max_bucket_size = self.total_size / self.num_buckets
         self.start_time = datetime.datetime.now()
 
         self.create_buckets()
         self.bucket_index = 0
-
-
 
     def login(self):
         try:
@@ -219,6 +192,7 @@ class QumuloFilesCommand(object):
 
     def process_folder_contents(self, dir_contents, path):
 
+
         for entry in dir_contents:
             size = 0
             if entry['type'] == "FS_FILE_TYPE_FILE":
@@ -254,11 +228,6 @@ def main():
     command = QumuloFilesCommand(sys.argv)
     command.process_folder(command.start_path)
     command.process_buckets()
-
-
-
-
-
 
 # Main
 if __name__ == '__main__':
