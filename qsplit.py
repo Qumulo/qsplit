@@ -27,9 +27,11 @@ qfiles.py --host ip_address|hostname [options] path
 
 # Import python libraries
 import argparse
+import arrow
 import datetime
 import sys
 import os
+
 
 # Import Qumulo REST libraries
 # Leaving in the 'magic file path' for customers who want to run these scripts
@@ -97,19 +99,8 @@ class Bucket:
 #### Classes
 class QumuloFilesCommand(object):
     ''' class wrapper for REST API cmd so that we can new them up in tests '''
-    def __init__(self, argv=None):
+    def __init__(self, args=None):
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--ip", "--host", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
-        parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
-        parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
-        parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
-        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
-        parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
-        parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
-
-
-        args = parser.parse_args()
         self.port = args.port
         self.user = args.user
         self.passwd = args.passwd
@@ -117,6 +108,11 @@ class QumuloFilesCommand(object):
         self.num_buckets = args.buckets
         self.verbose = args.verbose
         self.start_path = args.start_path
+
+        if args.since is not None:
+            self.since = self.since = arrow.get(args.since)
+        else:
+            self.since = None
 
         self.connection = None
         self.credentials = None
@@ -185,10 +181,28 @@ class QumuloFilesCommand(object):
 
     def process_folder(self, path):
 
-        response = fs.read_entire_directory(self.connection, self.credentials,
-                                            page_size=5000, path=path)
+        response = fs.read_entire_directory(self.connection, self.credentials,page_size=5000, path=path)
+
         for r in response:
-            self.process_folder_contents(r.data['files'], path)
+            # self.process_folder_contents(r.data['files'], path)
+            if self.since is not None:
+                # BUG? Hmmm.... not sure how dependable change_time is vs max_ctime and so forth...
+                # 'change_time' instead of 'max_ctime'
+                if type(r.data) == type(dict()): 
+                    if arrow.get(r.data['change_time']) >= self.since:
+                        nodes = r.data
+                    else:
+                        nodes = []
+                else:
+                    nodes = [ n for n in r.data if arrow.get(n['change_time']) >= self.since]
+            else:
+                nodes = r.data
+
+            if nodes:
+                # Hmmmm... 
+                if type(nodes) == type(dict()):
+                    nodes = [ nodes ]
+                self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
 
@@ -225,7 +239,21 @@ class QumuloFilesCommand(object):
 ### Main subroutine
 def main():
     ''' Main entry point '''
-    command = QumuloFilesCommand(sys.argv)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", "--host", default="music", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
+    parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
+    parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
+    parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
+    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
+    parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")        
+    parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
+    parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
+
+    args = parser.parse_args()
+
+    command = QumuloFilesCommand(args)
+
     command.process_folder(command.start_path)
     command.process_buckets()
 
