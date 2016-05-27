@@ -27,9 +27,11 @@ qfiles.py --host ip_address|hostname [options] path
 
 # Import python libraries
 import argparse
+import arrow
 import datetime
 import sys
 import os
+
 
 # Import Qumulo REST libraries
 # Leaving in the 'magic file path' for customers who want to run these scripts
@@ -97,19 +99,8 @@ class Bucket:
 #### Classes
 class QumuloFilesCommand(object):
     ''' class wrapper for REST API cmd so that we can new them up in tests '''
-    def __init__(self, argv=None):
+    def __init__(self, args=None):
 
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--ip", "--host", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
-        parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
-        parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
-        parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
-        parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
-        parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
-        parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
-
-
-        args = parser.parse_args()
         self.port = args.port
         self.user = args.user
         self.passwd = args.passwd
@@ -118,12 +109,22 @@ class QumuloFilesCommand(object):
         self.verbose = args.verbose
         self.start_path = args.start_path
 
+        if args.since is not None:
+            self.since = self.since = arrow.get(args.since)
+        else:
+            self.since = None
+
         self.connection = None
         self.credentials = None
 
         self.login()
         self.total_size = self.get_directory_size(self.start_path)
         self.max_bucket_size = self.total_size / self.num_buckets
+
+        if self.verbose:
+            print "--------Total size: " + str(self.total_size) + " -------------"
+            print "--------Max Bucket size: " + str(self.max_bucket_size) + " -------------"
+
         self.start_time = datetime.datetime.now()
 
         self.create_buckets()
@@ -158,7 +159,10 @@ class QumuloFilesCommand(object):
     def get_next_bucket(self):
         # Only increment to a new bucket if we are not already pointing to the
         # last one
-        if self.bucket_index < len(self.buckets) -1:
+        if self.bucket_index < self.num_buckets: 
+            print "Filled bucket " + str(self.bucket_index)
+            if self.verbose:
+                self.current_bucket().print_contents()
             self.bucket_index +=1
 
     def process_buckets(self):
@@ -183,15 +187,35 @@ class QumuloFilesCommand(object):
 
         return int(result.data['total_capacity'])
 
+    def add_node(self, path):
+        # API Call #2:  fs.read_dir_aggregates for a single entry
+        agg = fs.read_dir_aggregates(self.connection, self.credentials, path, max_entries=1).data
+        # return True if max_ctime is with the range of months we care about
+        # (i.e. ready to age out)
+        change_time = arrow.get(agg['max_change_time'])
+        if (change_time >= self.since):
+            return True
+        else:
+            return False
+
     def process_folder(self, path):
 
-        response = fs.read_entire_directory(self.connection, self.credentials,
-                                            page_size=5000, path=path)
+        response = fs.read_entire_directory(self.connection, self.credentials,page_size=15, path=path)
+
+        nodes = []
+
         for r in response:
-            self.process_folder_contents(r.data['files'], path)
+
+            if r.data['type'] == 'FS_FILE_TYPE_DIRECTORY' and self.since is not None:
+                if self.add_node(r.data['path']):
+                    nodes.append(r.data) 
+            else:
+                nodes.append(r.data)
+
+        if len(nodes) > 0:
+            self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
-
 
         for entry in dir_contents:
             size = 0
@@ -200,32 +224,46 @@ class QumuloFilesCommand(object):
             else:
                 size = self.get_directory_size(entry['path'])
 
-            # File or dir fits in the current bucket -> add it
-            if size <= self.current_bucket().remaining_capacity():
+            # File or dir fits in the current bucket or 
+            # we're on the last bucket already -> add it
+            if (size <= self.current_bucket().remaining_capacity()) or (self.bucket_index == (self.num_buckets-1)):
                 self.current_bucket().add(entry, path, size)
-            # This item is too large to fit in the bucket.
-            # Check if it is a dir and traverse it.
-            # We can pick some files within in
-            elif (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
-                new_path = path + entry['name'] + "/"
-                self.process_folder(new_path)
-            # Don't leave an empty bucket.
-            elif self.current_bucket().bucket_count() == 0:
-               self.current_bucket().add(entry, path, size)
-            #Out of space in the current bucket and this is a file
-            #Create a new bucket and add the item to it
             else:
-                print "Filled bucket " + str(self.bucket_index)
-                #self.current_bucket().print_contents()
+                # This item is too large to fit in the bucket.
+                # Check if it is a dir and traverse it.
+                # We can pick files within 
+                if (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
+                    new_path = path + entry['name'] + "/"
+                    self.process_folder(new_path)
+                else:
+                    # It is a file that doesn't fit. Start a new bucket.
+                    self.get_next_bucket()
+                    print "Starting bucket " + str(self.bucket_index)
 
-                self.get_next_bucket()
+                if (self.bucket_index == (self.num_buckets-1)):
+                    print "Oversized: Adding " + path + " to last bucket..."
+ 
                 self.current_bucket().add(entry, path, size)
 
 
 ### Main subroutine
 def main():
     ''' Main entry point '''
-    command = QumuloFilesCommand(sys.argv)
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--ip", "--host", default="music", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
+    parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
+    parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
+    parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
+    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
+    parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")        
+    parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
+    parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
+
+    args = parser.parse_args()
+
+    command = QumuloFilesCommand(args)
+
     command.process_folder(command.start_path)
     command.process_buckets()
 
