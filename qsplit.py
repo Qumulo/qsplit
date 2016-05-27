@@ -120,6 +120,11 @@ class QumuloFilesCommand(object):
         self.login()
         self.total_size = self.get_directory_size(self.start_path)
         self.max_bucket_size = self.total_size / self.num_buckets
+
+        if self.verbose:
+            print "--------Total size: " + str(self.total_size) + " -------------"
+            print "--------Max Bucket size: " + str(self.max_bucket_size) + " -------------"
+
         self.start_time = datetime.datetime.now()
 
         self.create_buckets()
@@ -154,7 +159,10 @@ class QumuloFilesCommand(object):
     def get_next_bucket(self):
         # Only increment to a new bucket if we are not already pointing to the
         # last one
-        if self.bucket_index < len(self.buckets) -1:
+        if self.bucket_index < self.num_buckets: 
+            print "Filled bucket " + str(self.bucket_index)
+            if self.verbose:
+                self.current_bucket().print_contents()
             self.bucket_index +=1
 
     def process_buckets(self):
@@ -179,33 +187,35 @@ class QumuloFilesCommand(object):
 
         return int(result.data['total_capacity'])
 
+    def add_node(self, path):
+        # API Call #2:  fs.read_dir_aggregates for a single entry
+        agg = fs.read_dir_aggregates(self.connection, self.credentials, path, max_entries=1).data
+        # return True if max_ctime is with the range of months we care about
+        # (i.e. ready to age out)
+        change_time = arrow.get(agg['max_change_time'])
+        if (change_time >= self.since):
+            return True
+        else:
+            return False
+
     def process_folder(self, path):
 
-        response = fs.read_entire_directory(self.connection, self.credentials,page_size=5000, path=path)
+        response = fs.read_entire_directory(self.connection, self.credentials,page_size=15, path=path)
+
+        nodes = []
 
         for r in response:
-            # self.process_folder_contents(r.data['files'], path)
-            if self.since is not None:
-                # BUG? Hmmm.... not sure how dependable change_time is vs max_ctime and so forth...
-                # 'change_time' instead of 'max_ctime'
-                if type(r.data) == type(dict()): 
-                    if arrow.get(r.data['change_time']) >= self.since:
-                        nodes = r.data
-                    else:
-                        nodes = []
-                else:
-                    nodes = [ n for n in r.data if arrow.get(n['change_time']) >= self.since]
-            else:
-                nodes = r.data
 
-            if nodes:
-                # Hmmmm... 
-                if type(nodes) == type(dict()):
-                    nodes = [ nodes ]
-                self.process_folder_contents(nodes, path)
+            if r.data['type'] == 'FS_FILE_TYPE_DIRECTORY' and self.since is not None:
+                if self.add_node(r.data['path']):
+                    nodes.append(r.data) 
+            else:
+                nodes.append(r.data)
+
+        if len(nodes) > 0:
+            self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
-
 
         for entry in dir_contents:
             size = 0
@@ -214,25 +224,25 @@ class QumuloFilesCommand(object):
             else:
                 size = self.get_directory_size(entry['path'])
 
-            # File or dir fits in the current bucket -> add it
-            if size <= self.current_bucket().remaining_capacity():
+            # File or dir fits in the current bucket or 
+            # we're on the last bucket already -> add it
+            if (size <= self.current_bucket().remaining_capacity()) or (self.bucket_index == (self.num_buckets-1)):
                 self.current_bucket().add(entry, path, size)
-            # This item is too large to fit in the bucket.
-            # Check if it is a dir and traverse it.
-            # We can pick some files within in
-            elif (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
-                new_path = path + entry['name'] + "/"
-                self.process_folder(new_path)
-            # Don't leave an empty bucket.
-            elif self.current_bucket().bucket_count() == 0:
-               self.current_bucket().add(entry, path, size)
-            #Out of space in the current bucket and this is a file
-            #Create a new bucket and add the item to it
             else:
-                print "Filled bucket " + str(self.bucket_index)
-                #self.current_bucket().print_contents()
+                # This item is too large to fit in the bucket.
+                # Check if it is a dir and traverse it.
+                # We can pick files within 
+                if (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
+                    new_path = path + entry['name'] + "/"
+                    self.process_folder(new_path)
+                else:
+                    # It is a file that doesn't fit. Start a new bucket.
+                    self.get_next_bucket()
+                    print "Starting bucket " + str(self.bucket_index)
 
-                self.get_next_bucket()
+                if (self.bucket_index == (self.num_buckets-1)):
+                    print "Oversized: Adding " + path + " to last bucket..."
+ 
                 self.current_bucket().add(entry, path, size)
 
 
