@@ -12,7 +12,20 @@ Example usage:
 ./qsplit.py --host music --buckets 4 --since "2016-01-20 00:00:00" /media/
 
   
-This python sample will use the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  It could also easily be adapted to build a file list for RoboCopy in Windows environments.
+This python sample will use the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
+
+# robocopy option 
+qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments.  To use it, specify the SMB root server and path as an option to qsplit.py as follows:
+
+    ./qsplit.py -r "\\mediaserver\media" --host music /media/ --buckets 4
+
+Instead of text files with entries that start with relative paths, each entry will now be fully-qualified so that robocopy can be used as the data mover.  Each entry will look like this
+
+    \\mediaserver\media\\media\shared iTunes library\B52's
+
+rather than this
+
+    shared iTunes library/B52's
 
 Approach:
 
@@ -32,7 +45,7 @@ where 'n' is # from 1..[# of buckets specified, above it is four]
 
 If you do not specify a '--buckets' param it will create a single bucket with all of the filepaths for the specified source and path.
 
-Once the files are created you can copy them to different machines/NICs to perform rsyncs in parallel.  You could also run the rsyncs on a single machine with separate processes but you'd likely bury the machine NIC with traffic that way.  So one way to use these manifests is:
+Once the files are created you can copy them to different machines/NICs to perform rsyncs (or robocopies) in parallel.  You could also run the rsyncs on a single machine with separate processes but you'd likely bury the machine NIC with traffic that way.  So one way to use these manifests is:
 
 1. Copy the results of qsplit/ text files to somewhere client machines can resolve them
 2. ssh to [n] different client machines with separate NICs
