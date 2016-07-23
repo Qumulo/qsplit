@@ -60,7 +60,7 @@ class Bucket:
         if use_robocopy:
             # flip any slashes in the path and prepend the robocopy-needed \\server\path\
             path = current_path + entry['name']
-            path = path_prefix + path.replace('/','\\')
+            path = '"' + path_prefix + path.replace('/','\\') + '"'
             # print "prefix is " + path_prefix + " and path is " + path
         else:
             path = current_path + entry['name']
