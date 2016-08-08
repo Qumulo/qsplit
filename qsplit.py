@@ -205,14 +205,17 @@ class QumuloFilesCommand(object):
             result = fs.read_dir_aggregates(self.connection, self.credentials,
                                             path=path)
         except qumulo.lib.request.RequestError, excpt:
-            print "Error: %s" % excpt
             sys.exit(1)
 
         return int(result.data['total_capacity'])
 
     def add_node(self, path):
         # API Call #2:  fs.read_dir_aggregates for a single entry
-        agg = fs.read_dir_aggregates(self.connection, self.credentials, path, max_entries=1).data
+        try:
+            agg = fs.read_dir_aggregates(self.connection, self.credentials, path, max_entries=1).data
+        except Exception, excpt:
+            print "Error in add_node: %s" % excpt
+            sys.exit(1)
         # return True if max_ctime is with the range of months we care about
         # (i.e. ready to age out)
         change_time = arrow.get(agg['max_change_time'])
@@ -223,26 +226,33 @@ class QumuloFilesCommand(object):
 
     def process_folder(self, path):
 
-        response = fs.read_entire_directory(self.connection, self.credentials,page_size=15, path=path)
-
-        nodes = []
+        try:
+            response = fs.read_entire_directory(self.connection, self.credentials,page_size=15, path=path)
+        except Exception, excpt:
+            print "Error in read_entire_directory: %s" % excpt
+            sys.exit(1)
 
         for r in response:
+            self.process_folder_contents(r.data['files'], path)
 
-            if r.data['type'] == 'FS_FILE_TYPE_DIRECTORY' and self.since is not None:
-                if self.add_node(r.data['path']):
-                    nodes.append(r.data) 
-            else:
-                nodes.append(r.data)
+        # nodes = []
 
-        if len(nodes) > 0:
-            self.process_folder_contents(nodes, path)
+        # for r in response:
+
+        #     if r.data['type'] == 'FS_FILE_TYPE_DIRECTORY' and self.since is not None:
+        #         if self.add_node(r.data['path']):
+        #             nodes.append(r.data) 
+        #     else:
+        #         nodes.append(r.data)
+
+        # if len(nodes) > 0:
+        #     self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
 
         for entry in dir_contents:
             size = 0
-            if entry['type'] == "FS_FILE_TYPE_FILE":
+            if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK": 
                 size = int(entry['size'])
             else:
                 size = self.get_directory_size(entry['path'])
@@ -262,7 +272,7 @@ class QumuloFilesCommand(object):
                     # It is a file that doesn't fit. Start a new bucket.
                     self.get_next_bucket()
                     print "Starting bucket " + str(self.bucket_index)
-
+                    
                 if (self.bucket_index == (self.num_buckets-1)):
                     print "Oversized: Adding " + path + " to last bucket..."
  
