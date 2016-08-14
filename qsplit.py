@@ -233,20 +233,16 @@ class QumuloFilesCommand(object):
             sys.exit(1)
 
         for r in response:
-            self.process_folder_contents(r.data['files'], path)
+            # self.process_folder_contents(r.data['files'], path)
+            # instead of passing the entire data['files'] collection
+            # for r, pass only the ones since change_time
+            if self.since:
+                nodes = []
+                nodes = [ n for n in r.data['files'] if arrow.get(n['change_time']) >= self.since]
+                self.process_folder_contents(nodes, path)
+            else:
+                self.process_folder_contents(r.data['files'], path)
 
-        # nodes = []
-
-        # for r in response:
-
-        #     if r.data['type'] == 'FS_FILE_TYPE_DIRECTORY' and self.since is not None:
-        #         if self.add_node(r.data['path']):
-        #             nodes.append(r.data) 
-        #     else:
-        #         nodes.append(r.data)
-
-        # if len(nodes) > 0:
-        #     self.process_folder_contents(nodes, path)
 
     def process_folder_contents(self, dir_contents, path):
 
@@ -272,7 +268,7 @@ class QumuloFilesCommand(object):
                     # It is a file that doesn't fit. Start a new bucket.
                     self.get_next_bucket()
                     print "Starting bucket " + str(self.bucket_index)
-                    
+
                 if (self.bucket_index == (self.num_buckets-1)):
                     print "Oversized: Adding " + path + " to last bucket..."
  
