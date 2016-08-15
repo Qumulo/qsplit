@@ -62,7 +62,7 @@ class Bucket:
             path = current_path + entry['name']
             # path = '"' + path_prefix + path.replace('/','\\') + '"'
             # print "prefix is " + path_prefix + " and path is " + path
-            path = '"' path.replace('/','\\') + '"'
+            path = '"' + path.replace('/','\\') + '"'
         else:
             path = current_path + entry['name']
 
