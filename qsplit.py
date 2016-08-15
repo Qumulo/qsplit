@@ -133,7 +133,7 @@ class QumuloFilesCommand(object):
 
         if args.robocopy is not None:  # it's Windows, Jake....
             self.use_robocopy = True
-            path_prefix = "\\" + args.robocopy
+            path_prefix = args.robocopy
             # path_prefix requires some fixup ... \\server\path becomes \\server\\path, should be \\server\path\
             self.path_prefix = path_prefix
         else:
