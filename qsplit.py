@@ -53,21 +53,36 @@ class Bucket:
         self.entries = []
         self.start_time = start_time
 
-    def add(self, entry, current_path, size, use_robocopy=False, path_prefix=None):
+    def add(self, entry, current_path, size, robocopy=False):
         ''' add an entry to the current bucket.  If there isn't space for the entry
             in the bucket such that we'll exceed max_bucket_size, create a new bucket
             and make it the current one. '''
-        if use_robocopy:
-            # flip any slashes in the path and prepend the robocopy-needed \\server\path\
-            path = current_path + entry['name']
-            path = '"' + path_prefix + path.replace('/','\\') + '"'
-            # print "prefix is " + path_prefix + " and path is " + path
-        else:
-            path = current_path + entry['name']
+
+        path = current_path + entry['name']
+
+        if robocopy:
+            path = path.replace('/','\\')
 
         bucket_entry = { "path" : path, "size" : size }
-        self.entries.append(bucket_entry)
-        self.free_space -= size
+
+        # TODO: Refactor!
+        if len([ e for e in self.entries if e['path']==bucket_entry['path']]) == 0:
+
+            # if we're creating robocopy buckets, don't add files just folders
+            if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
+                self.entries.append(bucket_entry)
+            elif not robocopy:
+                self.entries.append(bucket_entry)
+            # decrement the size, regardless
+            self.free_space -= size
+        elif len(self.entries) == 0:
+            # if we're creating robocopy buckets, don't add files just folders
+            if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
+                self.entries.append(bucket_entry)
+            elif not robocopy:
+                self.entries.append(bucket_entry)
+            # decrement the size, regardless
+            self.free_space -= size
 
     def remaining_capacity(self):
         return self.free_space
@@ -93,14 +108,14 @@ class Bucket:
             print "Overflow: " + str(total_size-self.size)
 
 
-    def save(self, bucket_number, offset, use_robocopy):
+    def save(self, bucket_number, offset, robocopy):
 
         # create a file for bucket path entries
         filename = "qsync_" + self.start_time.strftime("%Y%m%d%H%M_bucket") + str(bucket_number) + ".txt"
         bucket_file = open(filename, 'w+')
 
         for entry in self.entries:
-            if use_robocopy:
+            if robocopy:
                 bucket_file.write(entry['path'].encode('utf-8') + '\n')
             else:
                 relative_path = entry['path'][offset:]
@@ -120,6 +135,7 @@ class QumuloFilesCommand(object):
         self.passwd = args.passwd
         self.host = args.host
         self.num_buckets = args.buckets
+        self.robocopy = args.robocopy
         self.verbose = args.verbose
         self.start_path = args.start_path
 
@@ -130,15 +146,6 @@ class QumuloFilesCommand(object):
 
         self.connection = None
         self.credentials = None
-
-        if args.robocopy is not None:  # it's Windows, Jake....
-            self.use_robocopy = True
-            path_prefix = args.robocopy
-            # path_prefix requires some fixup ... \\server\path becomes \\server\\path, should be \\server\path\
-            self.path_prefix = path_prefix
-        else:
-            self.use_robocopy = False
-            self.path_prefix = None
 
         self.login()
         self.total_size = self.get_directory_size(self.start_path)
@@ -192,7 +199,7 @@ class QumuloFilesCommand(object):
         i = 1
         for bucket in self.buckets:
 
-            bucket.save(i, len(self.start_path), self.use_robocopy)
+            bucket.save(i, len(self.start_path), self.robocopy)
 
             if self.verbose:
                 print "--------Dumping Bucket: " + str(i) + "-------------"
@@ -256,7 +263,7 @@ class QumuloFilesCommand(object):
             # File or dir fits in the current bucket or 
             # we're on the last bucket already -> add it
             if (size <= self.current_bucket().remaining_capacity()) or (self.bucket_index == (self.num_buckets-1)):
-                self.current_bucket().add(entry, path, size, self.use_robocopy, self.path_prefix)
+                self.current_bucket().add(entry, path, size, self.robocopy)
             else:
                 # This item is too large to fit in the bucket.
                 # Check if it is a dir and traverse it.
@@ -272,7 +279,7 @@ class QumuloFilesCommand(object):
                 if (self.bucket_index == (self.num_buckets-1)):
                     print "Oversized: Adding " + path + " to last bucket..."
  
-                self.current_bucket().add(entry, path, size, self.use_robocopy, self.path_prefix)
+                self.current_bucket().add(entry, path, size, self.robocopy)
 
 
 ### Main subroutine
@@ -285,11 +292,10 @@ def main():
     parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
     parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
     parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
-    parser.add_argument("-r", "--robocopy", dest="robocopy", required=False, help="specify leading server and path in form '\\\\server\path' (use quotes, no trailing slash)")
     parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")        
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
+    parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
     parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
-
     args = parser.parse_args()
 
     command = QumuloFilesCommand(args)
