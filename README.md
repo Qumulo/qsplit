@@ -15,9 +15,9 @@ Example usage:
 This python sample will use the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
 
 # robocopy option 
-qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments.  To use it, specify the SMB root server and path as an option to qsplit.py as follows:
+qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments:
 
-    ./qsplit.py -r "\\mediaserver\media" --host music /media/ --buckets 4
+    ./qsplit.py -r --host music /media/ --buckets 4
 
 Instead of text files with entries that start with relative paths, each entry will now be fully-qualified so that robocopy can be used as the data mover.  Each entry will look like this
 
