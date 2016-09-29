@@ -234,20 +234,25 @@ class QumuloFilesCommand(object):
     def process_folder(self, path):
 
         try:
-            response = fs.read_entire_directory(self.connection, self.credentials,page_size=15, path=path)
+            response = fs.read_entire_directory(self.connection, self.credentials, page_size=1000, path=path)
         except Exception, excpt:
             print "Error in read_entire_directory: %s" % excpt
             sys.exit(1)
 
         for r in response:
+
             # self.process_folder_contents(r.data['files'], path)
             # instead of passing the entire data['files'] collection
             # for r, pass only the ones since change_time
             if self.since:
                 nodes = []
                 nodes = [ n for n in r.data['files'] if arrow.get(n['change_time']) >= self.since]
+                if self.verbose:
+                    print("processing " + str(len(nodes)) + " in path " + path)
                 self.process_folder_contents(nodes, path)
             else:
+                if self.verbose:
+                    print("processing " + str(len(r.data['files'])) + " in path " + path)
                 self.process_folder_contents(r.data['files'], path)
 
 
@@ -270,6 +275,8 @@ class QumuloFilesCommand(object):
                 # We can pick files within  
                 if (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
                     new_path = path + entry['name'] + "/"
+                    if self.verbose:
+                        print("Calling process_folder with " + new_path + "... ")
                     self.process_folder(new_path)
                 else:
                     # It is a file that doesn't fit. Start a new bucket.
