@@ -17,7 +17,7 @@ This python sample will use the read_dir_aggregates API to build a list of paths
 that can be piped to tools such as rsync in order to optimize a migration
 *from* a qumulo cluster to another disk target.
 Approach:
-- divide a qumulo cluster into N equal partitions based on . A partition is a list of paths.
+- divide a qumulo cluster into N equal partitions based on size. A partition is a list of paths.
 The partitioning is based on the block count, which is obtained from
 fs_read_dir_aggregates
 - feed each partition to an rsync client
@@ -216,21 +216,6 @@ class QumuloFilesCommand(object):
 
         return int(result.data['total_capacity'])
 
-    def add_node(self, path):
-        # API Call #2:  fs.read_dir_aggregates for a single entry
-        try:
-            agg = fs.read_dir_aggregates(self.connection, self.credentials, path, max_entries=1).data
-        except Exception, excpt:
-            print "Error in add_node: %s" % excpt
-            sys.exit(1)
-        # return True if max_ctime is with the range of months we care about
-        # (i.e. ready to age out)
-        change_time = arrow.get(agg['max_change_time'])
-        if (change_time >= self.since):
-            return True
-        else:
-            return False
-
     def process_folder(self, path):
 
         try:
@@ -246,7 +231,7 @@ class QumuloFilesCommand(object):
             # for r, pass only the ones since change_time
             if self.since:
                 nodes = []
-                nodes = [ n for n in r.data['files'] if arrow.get(n['change_time']) >= self.since]
+                nodes = [ n for n in r.data['files'] if arrow.get(n['modification_time']) >= self.since]
                 if self.verbose:
                     print("processing " + str(len(nodes)) + " in path " + path)
                 self.process_folder_contents(nodes, path)
@@ -298,7 +283,7 @@ def main():
     parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
     parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
     parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
-    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of files; defaults to 1")
+    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of manifest files (aka 'buckets'); defaults to 1")
     parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")        
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
     parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
