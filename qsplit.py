@@ -90,28 +90,15 @@ class Bucket:
 
         bucket_entry = { "path" : path, "size" : size }
 
-        # TODO: Refactor!
-        if len([ e for e in self.entries if e['path']==bucket_entry['path']]) == 0:
-
-            # if we're creating robocopy buckets, don't add files just folders
-            if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
-                # self.entries.append(bucket_entry)
-                self.add_without_duplicate(bucket_entry)
-            elif not robocopy:
-                # self.entries.append(bucket_entry)
-                self.add_without_duplicate(bucket_entry)
-            # decrement the size, regardless
-            self.free_space -= size
-        elif len(self.entries) == 0:
-            # if we're creating robocopy buckets, don't add files just folders
-            if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
-                # self.entries.append(bucket_entry)
-                self.add_without_duplicate(bucket_entry)
-            elif not robocopy:
-                # self.entries.append(bucket_entry)
-                self.add_without_duplicate(bucket_entry)
-            # decrement the size, regardless
-            self.free_space -= size
+        # if we're creating robocopy buckets, don't add files just folders
+        if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
+            # self.entries.append(bucket_entry)
+            self.add_without_duplicate(bucket_entry)
+        elif not robocopy:
+            # self.entries.append(bucket_entry)
+            self.add_without_duplicate(bucket_entry)
+        # decrement the size, regardless
+        self.free_space -= size
 
     def remaining_capacity(self):
         return self.free_space
