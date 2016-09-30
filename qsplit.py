@@ -53,6 +53,31 @@ class Bucket:
         self.entries = []
         self.start_time = start_time
 
+    def add_without_duplicate(self, entry_to_add):
+        ''' 
+        add_without_duplicate will add a (directory) entry to bucket entries 
+        only if we're not already handling contents for that directory. 
+        Example 1:
+        last_bucket_entry = "iTunes/TV/Pan Am/._05 One Coin in a Fountain (HD).m4v"
+        entry_to_add = "iTunes/TV/Pan Am/"
+
+        In this case we're already splitting the Pan Am directory so we don't add
+        the directory itself as an entry (which just creates more work for rsync or robocopy).
+
+        Example 2:
+        last_bucket_entry = "iTunes/TV/Pan Am/._05 One Coin in a Fountain (HD).m4v"
+        entry_to_add = "iTunes/TV/Pan Am/03 Ich Bin Ein Berliner (HD).m4v
+
+        In this case we add entry_to_add to the current bucket.
+        '''
+        if len(self.entries) > 0:
+            if  not(entry_to_add["path"] in self.entries[-1]["path"]):
+                self.entries.append(entry_to_add)
+        else:
+            self.entries.append(entry_to_add)
+
+        return
+
     def add(self, entry, current_path, size, robocopy=False):
         ''' add an entry to the current bucket.  If there isn't space for the entry
             in the bucket such that we'll exceed max_bucket_size, create a new bucket
@@ -70,17 +95,21 @@ class Bucket:
 
             # if we're creating robocopy buckets, don't add files just folders
             if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
-                self.entries.append(bucket_entry)
+                # self.entries.append(bucket_entry)
+                self.add_without_duplicate(bucket_entry)
             elif not robocopy:
-                self.entries.append(bucket_entry)
+                # self.entries.append(bucket_entry)
+                self.add_without_duplicate(bucket_entry)
             # decrement the size, regardless
             self.free_space -= size
         elif len(self.entries) == 0:
             # if we're creating robocopy buckets, don't add files just folders
             if robocopy and entry['type'] == "FS_FILE_TYPE_DIRECTORY" :
-                self.entries.append(bucket_entry)
+                # self.entries.append(bucket_entry)
+                self.add_without_duplicate(bucket_entry)
             elif not robocopy:
-                self.entries.append(bucket_entry)
+                # self.entries.append(bucket_entry)
+                self.add_without_duplicate(bucket_entry)
             # decrement the size, regardless
             self.free_space -= size
 
@@ -231,7 +260,7 @@ class QumuloFilesCommand(object):
             # for r, pass only the ones since change_time
             if self.since:
                 nodes = []
-                nodes = [ n for n in r.data['files'] if arrow.get(n['modification_time']) >= self.since]
+                nodes = [ n for n in r.data['files'] if arrow.get(n['change_time']) >= self.since]
                 if self.verbose:
                     print("processing " + str(len(nodes)) + " in path " + path)
                 self.process_folder_contents(nodes, path)
@@ -274,7 +303,6 @@ class QumuloFilesCommand(object):
                 self.current_bucket().add(entry, path, size, self.robocopy)
 
 
-### Main subroutine
 def main():
     ''' Main entry point '''
 
