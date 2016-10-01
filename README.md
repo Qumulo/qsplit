@@ -1,24 +1,18 @@
 # qsplit -- creates manifest files for parallel rsync and other scenarios
 
-The qsplit utility supports two use cases:
-Optimized Migration using dir aggregates/REST API
-Replication using max_ctime via REST API
-
-**WARNING**: At present, we cannot provide a guarantee to users that replication based on max_ctime will pick up all changed files that are due for replication; this is due to how we currently propogate metadata about filesystem changes.  This will be addressed in a subsequent release.  NOTE that you can use the since parameter but proceed with caution as metadata for change time may not have
-been propagated to a given directory at the time of the API call. 
+The qsplit utility is used to move data from a qumulo cluster by using Qumulo dir aggregates/REST API
 
 Example usage:
 
-./qsplit.py --host music --buckets 4 --since "2016-01-20 00:00:00" /media/
+./qsplit.py --host music --buckets 4 /media/
 
   
-This python sample will use the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
+Qsplit uses the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
 
 # robocopy option 
 qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments which writes out file specs using backslashes rather than forward slashes:
 
     ./qsplit.py -r --host music /media/ --buckets 4
-
 
 Approach:
 
