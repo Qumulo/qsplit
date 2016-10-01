@@ -155,11 +155,6 @@ class QumuloFilesCommand(object):
         self.verbose = args.verbose
         self.start_path = args.start_path
 
-        if args.since is not None:
-            self.since = self.since = arrow.get(args.since)
-        else:
-            self.since = None
-
         self.connection = None
         self.credentials = None
 
@@ -241,20 +236,9 @@ class QumuloFilesCommand(object):
             sys.exit(1)
 
         for r in response:
-
-            # self.process_folder_contents(r.data['files'], path)
-            # instead of passing the entire data['files'] collection
-            # for r, pass only the ones since change_time
-            if self.since:
-                nodes = []
-                nodes = [ n for n in r.data['files'] if arrow.get(n['change_time']) >= self.since]
-                if self.verbose:
-                    print("processing " + str(len(nodes)) + " in path " + path)
-                self.process_folder_contents(nodes, path)
-            else:
-                if self.verbose:
-                    print("processing " + str(len(r.data['files'])) + " in path " + path)
-                self.process_folder_contents(r.data['files'], path)
+            if self.verbose:
+                print("processing " + str(len(r.data['files'])) + " in path " + path)
+            self.process_folder_contents(r.data['files'], path)
 
 
     def process_folder_contents(self, dir_contents, path):
@@ -299,7 +283,6 @@ def main():
     parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
     parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
     parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of manifest files (aka 'buckets'); defaults to 1")
-    parser.add_argument("-s", "--since", required=False, dest="since", help="Specify comparision datetime in quoted YYYY-MM-DDTHH:MM:SS format to compare (defaults to none / all files)")        
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
     parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
     parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
