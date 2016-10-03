@@ -150,6 +150,7 @@ class QumuloFilesCommand(object):
         self.user = args.user
         self.passwd = args.passwd
         self.host = args.host
+        self.excludes = args.excludes
         self.num_buckets = args.buckets
         self.robocopy = args.robocopy
         self.verbose = args.verbose
@@ -250,6 +251,12 @@ class QumuloFilesCommand(object):
     def process_folder_contents(self, dir_contents, path):
 
         for entry in dir_contents:
+            # Exclude any entries that match the list of regular expressions
+            if any(re.compile(regex).search(entry['path']) for regex in self.excludes):
+                if self.verbose:
+                    print "Excluding path %s" % (entry['path'])
+                return
+
             size = 0
             if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK": 
                 size = int(entry['size'])
@@ -292,6 +299,7 @@ def main():
     parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of manifest files (aka 'buckets'); defaults to 1")
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
     parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
+    parser.add_argument("-e", "--exclude", default=[], required=False, dest="excludes", nargs='*', help="A regular expression that excludes paths from bucket creation")
     parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
     args = parser.parse_args()
 
