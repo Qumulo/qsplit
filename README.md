@@ -22,6 +22,15 @@ qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environmen
 
     ./qsplit.py -r --host music /media/ --buckets 4
 
+# Excluding paths
+You can use regular expressions to exclude paths from your buckets. For example:
+
+    ./qsplit.py --host music --exclude "^/media/wav/.*" --buckets 4 /media/
+
+For more information on the regular expression format, visit:
+
+    https://docs.python.org/2/howto/regex.html#regex-howto
+
 Approach:
 
 - divide a qumulo cluster into N equal partitions. A partition is a list of paths. The partitioning is based on the block count, which is obtained from fs_read_dir_aggregates
