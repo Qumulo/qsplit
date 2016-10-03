@@ -9,6 +9,14 @@ Example usage:
   
 Qsplit uses the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
 
+# Authentication
+Qsplit will reuse the Qumulo API's stored credentials. You can create these credentials with:
+     qq --host music login
+
+Alternatively, credentials can be specified on the command line:
+
+    ./qsplit.py --host music --user admin --pass admin buckets 4 /media/
+
 # robocopy option 
 qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments which writes out file specs using backslashes rather than forward slashes:
 
