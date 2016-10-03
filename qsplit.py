@@ -155,8 +155,8 @@ class QumuloFilesCommand(object):
         self.verbose = args.verbose
         self.start_path = args.start_path
 
-        self.connection = None
-        self.credentials = None
+        self.connection =  qumulo.lib.request.Connection(self.host, int(self.port))
+        self.credentials = qumulo.lib.auth.get_credentials(args.credentials_store)
 
         self.login()
         self.total_size = self.get_directory_size(self.start_path)
@@ -172,9 +172,15 @@ class QumuloFilesCommand(object):
         self.bucket_index = 0
 
     def login(self):
+	# Check to see if we have valid stored credentials before we try the
+	#   specified username and password.
+	try:
+            if qumulo.rest.auth.who_am_i(self.connection, self.credentials):
+                return
+        except qumulo.lib.request.RequestError:
+		pass
+
         try:
-            self.connection = qumulo.lib.request.Connection(\
-                                self.host, int(self.port))
             login_results, _ = qumulo.rest.auth.login(\
                     self.connection, None, self.user, self.passwd)
 
@@ -280,6 +286,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", "--host", default="music", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
     parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
+    parser.add_argument("--credentials-store", default=qumulo.lib.auth.credential_store_filename(), help="Read qumulo_api credentials from a custom path")
     parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
     parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
     parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of manifest files (aka 'buckets'); defaults to 1")
