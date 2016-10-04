@@ -1,4 +1,4 @@
-# qsplit -- creates manifest files for parallel rsync and other scenarios
+# qsplit -- creates manifest files for parallel replication using rsync or robocopy
 
 The qsplit utility is used to move data from a qumulo cluster by using Qumulo dir aggregates/REST API
 
