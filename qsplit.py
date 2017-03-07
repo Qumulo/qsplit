@@ -32,7 +32,6 @@ specify a -r (or --robocopy) option (note the trailing slash after path):
 
 # Import python libraries
 import argparse
-import arrow
 import datetime
 import os
 import re
@@ -123,6 +122,11 @@ class Bucket:
             print "More data stored in bucket that initial size"
             print "Overflow: " + str(total_size-self.size)
 
+    def get_bucket_size(self):
+        total_size = 0
+        for entry in self.entries:
+            total_size += int(entry['size'])
+        return total_size
 
     def save(self, bucket_number, offset, robocopy):
 
@@ -170,15 +174,16 @@ class QumuloFilesCommand(object):
 
         self.create_buckets()
         self.bucket_index = 0
+        self.items_iterated_count = 0
 
     def login(self):
-	# Check to see if we have valid stored credentials before we try the
-	#   specified username and password.
-	try:
+    # Check to see if we have valid stored credentials before we try the
+    #   specified username and password.
+        try:
             if qumulo.rest.auth.who_am_i(self.connection, self.credentials):
                 return
         except qumulo.lib.request.RequestError:
-		pass
+            pass
 
         try:
             login_results, _ = qumulo.rest.auth.login(\
@@ -207,7 +212,6 @@ class QumuloFilesCommand(object):
         # Only increment to a new bucket if we are not already pointing to the
         # last one
         if self.bucket_index < self.num_buckets: 
-            print "Filled bucket " + str(self.bucket_index)
             if self.verbose:
                 self.current_bucket().print_contents()
             self.bucket_index +=1
@@ -215,7 +219,10 @@ class QumuloFilesCommand(object):
     def process_buckets(self):
         i = 1
         for bucket in self.buckets:
-
+            print("Bucket %s size: %s GB (%s%%) -  count: %s" % (str(i).rjust(3), 
+                                                    str(round(bucket.get_bucket_size()/(1000*1000*1000), 1)).rjust(7), 
+                                                    str(round(100.0 * bucket.get_bucket_size()/self.total_size,1)).rjust(5),
+                                                    len(bucket.entries)))
             bucket.save(i, len(self.start_path), self.robocopy)
 
             if self.verbose:
@@ -245,11 +252,14 @@ class QumuloFilesCommand(object):
             if self.verbose:
                 print("processing " + str(len(r.data['files'])) + " in path " + path)
             self.process_folder_contents(r.data['files'], path)
+            self.items_iterated_count += 1
 
 
     def process_folder_contents(self, dir_contents, path):
 
         for entry in dir_contents:
+            if (self.items_iterated_count % 500) == 0:
+                print("Processed %s items." % (self.items_iterated_count, ))
             size = 0
             if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK": 
                 size = int(entry['size'])
@@ -263,7 +273,7 @@ class QumuloFilesCommand(object):
             else:
                 # This item is too large to fit in the bucket.
                 # Check if it is a dir and traverse it.
-                # We can pick files within  
+                # We can pick files within
                 if (entry['type'] == "FS_FILE_TYPE_DIRECTORY"):
                     new_path = path + entry['name'] + "/"
                     if self.verbose:
@@ -272,12 +282,10 @@ class QumuloFilesCommand(object):
                 else:
                     # It is a file that doesn't fit. Start a new bucket.
                     self.get_next_bucket()
-                    print "Starting bucket " + str(self.bucket_index)
-
-                if (self.bucket_index == (self.num_buckets-1)):
-                    print "Oversized: Adding " + path + " to last bucket..."
+                    print("Starting bucket " + str(self.bucket_index))
+                    self.current_bucket().add(entry, path, size, self.robocopy)
+            self.items_iterated_count += 1
  
-                self.current_bucket().add(entry, path, size, self.robocopy)
 
 
 def main():
@@ -296,8 +304,9 @@ def main():
     args = parser.parse_args()
 
     command = QumuloFilesCommand(args)
-
+    print("Begin folder and file traversal.")
     command.process_folder(command.start_path)
+    print("Completed folder and file traversal. Process Buckets.")
     command.process_buckets()
 
 # Main
