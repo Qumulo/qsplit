@@ -16,18 +16,19 @@
 This python sample will use the read_dir_aggregates API to build a list of paths
 that can be piped to tools such as rsync in order to optimize a migration
 *from* a qumulo cluster to another disk target.
+
 Approach:
 - divide a qumulo cluster into N equal partitions based on size. A partition is a list of paths.
-The partitioning is based on the block count, which is obtained from
-fs_read_dir_aggregates
+The partitioning is based on the block count, which is obtained from fs_read_dir_aggregates
 - feed each partition to an rsync client
+
 == Typical Script Usage:
-./qsplit.py --host ip_address|hostname [options] path
+python qsplit.py --ip ip_address|hostname [options] path
 
 If you are targeting a Windows environment and want to use robocopy as the data mover tool,
-specify a -r (or --robocopy) option (note the trailing slash after path):
+specify a -r (or --robocopy) option:
 
-./qsplit.py r \\servername\path\ --host music /media/ --buckets 4
+python qsplit.py -r --ip 192.168.1.88 /media --buckets 4
 '''
 
 # Import python libraries
@@ -128,12 +129,9 @@ class Bucket:
             total_size += int(entry['size'])
         return total_size
 
-    def save(self, bucket_number, offset, robocopy):
-
+    def save(self, filename, offset, robocopy):
         # create a file for bucket path entries
-        filename = "qsync_" + self.start_time.strftime("%Y%m%d%H%M_bucket") + str(bucket_number) + ".txt"
         bucket_file = open(filename, 'w+')
-
         for entry in self.entries:
             if robocopy:
                 bucket_file.write(entry['path'].encode('utf-8') + '\n')
@@ -141,7 +139,6 @@ class Bucket:
                 relative_path = entry['path'][offset:]
                 # relative_path = entry['path']
                 bucket_file.write(relative_path.encode('utf-8') + '\n')
-
         bucket_file.close()
 
 
@@ -155,9 +152,11 @@ class QumuloFilesCommand(object):
         self.passwd = args.passwd
         self.host = args.host
         self.num_buckets = args.buckets
+        self.agg_type = args.agg_type
         self.robocopy = args.robocopy
         self.verbose = args.verbose
-        self.start_path = args.start_path
+        # add trailing slash if it doesn't exist
+        self.start_path = re.sub("([^/])$", "\g<1>/", args.start_path)
 
         self.connection =  qumulo.lib.request.Connection(self.host, int(self.port))
         self.credentials = qumulo.lib.auth.get_credentials(args.credentials_store)
@@ -217,19 +216,33 @@ class QumuloFilesCommand(object):
             self.bucket_index +=1
 
     def process_buckets(self):
-        i = 1
+        bucket_num = 1
+        units = "GB"
+        if self.agg_type == 'files':
+            units = "Inodes"
         for bucket in self.buckets:
-            print("Bucket %s size: %s GB (%s%%) -  count: %s" % (str(i).rjust(3), 
-                                                    str(round(bucket.get_bucket_size()/(1000*1000*1000), 1)).rjust(7), 
-                                                    str(round(100.0 * bucket.get_bucket_size()/self.total_size,1)).rjust(5),
-                                                    len(bucket.entries)))
-            bucket.save(i, len(self.start_path), self.robocopy)
+            sz = str(round(bucket.get_bucket_size()/(1000*1000*1000), 1))
+            bucket_percent = round(100.0 * bucket.get_bucket_size()/self.total_size,1)
+            filename = "split_bucket_%s.txt" % (bucket_num, )
+
+            if self.agg_type == 'files':
+                sz = str(bucket.get_bucket_size())
+            print("Bucket %s size: %s %s (%s%%) -  count: %s  file_name: %s" % (
+                                                    str(bucket_num).rjust(3), 
+                                                    sz.rjust(9), 
+                                                    units,
+                                                    str(bucket_percent).rjust(5),
+                                                    str(len(bucket.entries)).rjust(8),
+                                                    filename
+                                                    )
+                 )
+            bucket.save(filename, len(self.start_path), self.robocopy)
 
             if self.verbose:
                 print "--------Dumping Bucket: " + str(i) + "-------------"
                 bucket.print_contents()
 
-            i += 1
+            bucket_num += 1
 
     def get_directory_size(self, path):
         try:
@@ -238,7 +251,14 @@ class QumuloFilesCommand(object):
         except qumulo.lib.request.RequestError, excpt:
             sys.exit(1)
 
-        return int(result.data['total_capacity'])
+        sz = int(result.data['total_capacity'])
+        if self.agg_type == 'files':
+            sz = int(result.data['total_files']) \
+                + int(result.data['total_other_objects']) \
+                + int(result.data['total_symlinks']) \
+                + int(result.data['total_directories'])
+        return sz
+
 
     def process_folder(self, path):
 
@@ -258,11 +278,14 @@ class QumuloFilesCommand(object):
     def process_folder_contents(self, dir_contents, path):
 
         for entry in dir_contents:
-            if (self.items_iterated_count % 500) == 0:
+            if self.items_iterated_count >0 and (self.items_iterated_count % 1000) == 0:
                 print("Processed %s items." % (self.items_iterated_count, ))
             size = 0
-            if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK": 
-                size = int(entry['size'])
+            if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK":
+                if self.agg_type == 'inode_count':
+                    size = 1
+                elif self.agg_type == 'capacity':
+                    size = int(entry['size'])
             else:
                 size = self.get_directory_size(entry['path'])
 
@@ -293,13 +316,14 @@ def main():
 
     parser = argparse.ArgumentParser()
     parser.add_argument("--ip", "--host", default="music", dest="host", required=True,  help="Required: Specify host (cluster) for file lists")
-    parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="specify port on cluster; defaults to 8000")
+    parser.add_argument("-P", "--port", type=int, dest="port", default=8000, required=False, help="Specify port on cluster; defaults to 8000")
     parser.add_argument("--credentials-store", default=qumulo.lib.auth.credential_store_filename(), help="Read qumulo_api credentials from a custom path")
-    parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="specify user credentials for login; defaults to admin")
-    parser.add_argument("--pass", default="admin", dest="passwd", required=False, help="specify user pwd for login, defaults to admin")
-    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="specify number of manifest files (aka 'buckets'); defaults to 1")
+    parser.add_argument("-u", "--user", default="admin", dest="user", required=False, help="Specify user credentials for login; defaults to admin")
+    parser.add_argument("--password", default="admin", dest="passwd", required=False, help="Specify user pwd for login, defaults to admin")
+    parser.add_argument("-b", "--buckets", type=int, default=1, dest="buckets", required=False, help="Specify number of manifest files (aka 'buckets'); defaults to 1")
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
     parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
+    parser.add_argument("-a", "--aggregate_type", default='capacity', required=False, dest="agg_type", help="Split based on 'capacity' (default) or 'files'")
     parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
     args = parser.parse_args()
 

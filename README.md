@@ -1,83 +1,96 @@
-# qsplit -- creates manifest files for parallel replication using rsync or robocopy
+This document details two versions of qsplit:
 
-The qsplit utility is used to move data from a qumulo cluster by using Qumulo dir aggregates/REST API
+1. Original **[qsplit](#qsplit-create-manifest-files-for-parallel-copy-using-rsync-or-robocopy)** which 
+creates rsync and robocopy manifests
+2. Newer **[qsplit rsync only](#qsplit-rsync-only-create-manifest-files-for-parallel-copy-using-rsync)** which is 
+better and handling situations where you maybe be doing multiple iterations of rsync.
 
-Example usage:
+# qsplit: Create manifest files for parallel copy using rsync or robocopy
 
-./qsplit.py --host music --buckets 4 /media/
+The qsplit utility is used to move data from a qumulo cluster by using Qumulo 
+file and directory aggregates from the REST API. Qsplit uses the 
+read_dir_aggregates API to build a list of paths (in ~log(n) time) that can 
+be piped to rsync in order to optimize a migration *from* a Qumulo cluster to 
+another target path.
 
-  
-Qsplit uses the read_dir_aggregates API to build a list of paths (in ~ log(n) time) that can be piped to rsync in order to optimize a migration *from* a qumulo cluster to another disk target.  
+Using theis approach you should see a significant performance improvement 
+over running rsync in the traditional way `rsync -av -r [src] [dest]`. The 
+performance should be better for two reasons:
 
-# Authentication
-Qsplit will reuse the Qumulo API's stored credentials. You can create these credentials with:
-     qq --host music login
+1. No file crawl needed by rsync because we're passing a filespsec in --files-from
+2. Running multiple instances of rsync in parallel
+3. Different client machines avoid burying the NIC and keep things busy and active.
 
-Alternatively, credentials can be specified on the command line:
 
-    ./qsplit.py --host music --user admin --pass admin buckets 4 /media/
+Example usage: `python qsplit.py --ip 192.168.1.88 -u admin -b 4 /media`
 
-# robocopy option 
-qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows environments which writes out file specs using backslashes rather than forward slashes:
 
-    ./qsplit.py -r --host music /media/ --buckets 4
+-----
 
-Approach:
 
-- divide a qumulo cluster into N equal partitions. A partition is a list of paths. The partitioning is based on the block count, which is obtained from fs_read_dir_aggregates
+## A detailed qsplit example
 
-- feed each partition to an rsync client
+First, a little about the "algorithm":
+
+1. Divide a qumulo cluster into N equal partitions. A partition is a list of 
+paths. The partitioning is based on the capacity (block count), which is obtained 
+from fs_read_dir_aggregates. (You can also specify partitioning using the argument
+`-a files`).
+2. Feed each partition to an rsync client
 
 As an example, I run the command like this:
 
-./qsplit.py --host music /music/ --buckets 4
+`python qsplit.py --ip 192.168.1.88 -b 4 /music`
 
-This will create four 'bucket files' for host 'music' and path '/music/': a bucket is a list of filepaths using naming convention
+This will create four 'bucket files' for host '192.168.1.88' and path '/music': 
+a bucket is a list of filepaths using naming convention `split_bucket_[n].txt` 
+where 'n' is # from 1..[# of buckets specified, above it is four]. If you do 
+not specify a '-b' param it will create a single bucket with all of the 
+filepaths for the specified source and path.
 
-qsync_[YYYYMMDDHHMM]_bucket[n].txt
+Once the files are created you can copy them to different machines/NICs to 
+perform rsyncs (or robocopies) in parallel. You could also run the rsyncs on a 
+single machine with separate processes but you'd likely bury the machine NIC 
+with traffic that way. So one way to use these manifests is:
 
-where 'n' is # from 1..[# of buckets specified, above it is four]
-
-If you do not specify a '--buckets' param it will create a single bucket with all of the filepaths for the specified source and path.
-
-Once the files are created you can copy them to different machines/NICs to perform rsyncs (or robocopies) in parallel.  You could also run the rsyncs on a single machine with separate processes but you'd likely bury the machine NIC with traffic that way.  So one way to use these manifests is:
-
-1. Copy the results of qsplit/ text files to somewhere client machines can resolve them
+1. Copy the results of qsplit/text files to somewhere client machines can resolve them
 2. ssh to [n] different client machines with separate NICs
 3. Mount the cluster [src] and [dest] on each machine
 4. On each machine run rsync in the following fashion:
 
-rsync -av -r --files-from=qsync_[YYYYMMDDHHMM]_bucket[n].txt [src qumulo cluster mount] [target cluster mount]
+`rsync -av -r --files-from=split_bucket_[n].txt [src qumulo cluster mount] [target cluster mount]`
 
-**NOTE** that the file paths in the bucket text files are all relative to the path specified when running qsplit so if you created filepaths for '/music/' then that should be your [src cluster mount] point so that the relative filepaths can resolve.
+**NOTE** that the file paths in the bucket text files are all relative to the 
+path specified when running qsplit so if you created filepaths for '/music' 
+then that should be your [src cluster mount] point so that the relative 
+filepaths can resolve.
 
-Using the above approach you should see a significant performance improvement over running rsync in the traditional way:
 
-rsync -av -r [src] [dest] 
+### Windows/robocopy option 
+qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows 
+environments which writes out file specs using backslashes rather 
+than forward slashes:
 
-The performance should be better for two reasons:
+`python qsplit.py -r --ip 192.168.1.88 -u admin -b 4 /media`
 
-1. No file crawl needed by rsync because we're passing a filespsec in --files-from
-2. running multiple instances of rsync in parallel
 
-In addition by running each instance on a different client machine we avoid burying the NIC for a single machine and keep things nice and busy/active.
+-----
+
+# qsplit rsync only: Create manifest files for parallel copy using rsync
+
+Example usage: `python qsplit-rsync-only.py --host 192.168.1.88 -b 4 /music`
+
+This will create four files that can be used with a command like the following:
+
+`rsync --filter '. rsync-filter-001.txt' -a Q/ T/`
+
+
+-----
 
 ## Prerequisites
 
 * Python 2.7
 
-if you're developing on a current version of Mac OSX, you should already have a 2.7 version of python.  you can check which version of python you have by opening a command promopt and typing
-
-  python -V
-
-To install Python 2.7 please visit the [Python Software Foundation
-Download Page](https://www.python.org/downloads/)  and select the most
-current version (at time of writing it is version 2.7.10)
-
-
-### 2. Install the Qumulo REST API Python Wrapper library
-
-Navigate to the folder where you installed qsplit locally, and run
 
 ```
   pip install -r requirements.txt
@@ -91,14 +104,7 @@ the following command at a command prompt:
 You should see something like the following output:
 
 ```
-astroid (1.3.8)
-logilab-common (1.1.0)
-nose (1.3.7)
-pip (7.1.2)
-pylint (1.4.4)
-qumulo-api (1.2.14)
-setuptools (17.0)
-six (1.10.0)
-wheel (0.24.0)
-
+...
+qumulo-api (2.6.10)
+...
 ```
