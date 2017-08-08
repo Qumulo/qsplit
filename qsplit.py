@@ -282,7 +282,7 @@ class QumuloFilesCommand(object):
                 print("Processed %s items." % (self.items_iterated_count, ))
             size = 0
             if entry['type'] == "FS_FILE_TYPE_FILE" or entry['type'] == "FS_FILE_TYPE_SYMLINK":
-                if self.agg_type == 'inode_count':
+                if self.agg_type == 'files':
                     size = 1
                 elif self.agg_type == 'capacity':
                     size = int(entry['size'])
