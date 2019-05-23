@@ -44,6 +44,7 @@ import sys
 import qumulo.lib.auth
 import qumulo.lib.request
 import qumulo.rest.fs as fs
+import qumulo.rest.snapshot as snap
 
 class Bucket:
 
@@ -137,7 +138,6 @@ class Bucket:
                 bucket_file.write(entry['path'].encode('utf-8') + '\n')
             else:
                 relative_path = entry['path'][offset:]
-                # relative_path = entry['path']
                 bucket_file.write(relative_path.encode('utf-8') + '\n')
         bucket_file.close()
 
@@ -155,6 +155,7 @@ class QumuloFilesCommand(object):
         self.agg_type = args.agg_type
         self.robocopy = args.robocopy
         self.verbose = args.verbose
+        self.snap = None
         # add trailing slash if it doesn't exist
         self.start_path = re.sub("([^/])$", "\g<1>/", args.start_path)
 
@@ -162,6 +163,10 @@ class QumuloFilesCommand(object):
         self.credentials = qumulo.lib.auth.get_credentials(args.credentials_store)
 
         self.login()
+        if args.snapshot_id is not None:
+            self.snap = snap.get_snapshot(self.connection, 
+                                          self.credentials,
+                                          args.snapshot_id).data
         self.total_size = self.get_directory_size(self.start_path)
         self.max_bucket_size = self.total_size / self.num_buckets
 
@@ -246,8 +251,10 @@ class QumuloFilesCommand(object):
 
     def get_directory_size(self, path):
         try:
-            result = fs.read_dir_aggregates(self.connection, self.credentials,
-                                            path=path)
+            result = fs.read_dir_aggregates(self.connection, 
+                                            self.credentials,
+                                            path=path, 
+                                            snapshot=self.snap['id'] if self.snap is not None else None)
         except qumulo.lib.request.RequestError, excpt:
             sys.exit(1)
 
@@ -289,10 +296,14 @@ class QumuloFilesCommand(object):
             else:
                 size = self.get_directory_size(entry['path'])
 
+            snap_dir = ""
+            if self.snap is not None:
+                snap_dir = ".snapshot/" + self.snap['directory_name'] + "/"
+
             # File or dir fits in the current bucket or 
             # we're on the last bucket already -> add it
             if (size <= self.current_bucket().remaining_capacity()) or (self.bucket_index == (self.num_buckets-1)):
-                self.current_bucket().add(entry, path, size, self.robocopy)
+                self.current_bucket().add(entry, path + snap_dir, size, self.robocopy)
             else:
                 # This item is too large to fit in the bucket.
                 # Check if it is a dir and traverse it.
@@ -306,7 +317,7 @@ class QumuloFilesCommand(object):
                     # It is a file that doesn't fit. Start a new bucket.
                     self.get_next_bucket()
                     print("Starting bucket " + str(self.bucket_index))
-                    self.current_bucket().add(entry, path, size, self.robocopy)
+                    self.current_bucket().add(entry, path + snap_dir, size, self.robocopy)
             self.items_iterated_count += 1
  
 
@@ -324,6 +335,7 @@ def main():
     parser.add_argument("-v", "--verbose", default=False, required=False, dest="verbose", help="Echo values to console; defaults to False ", action="store_true")
     parser.add_argument("-r", "--robocopy", default=False, required=False, dest="robocopy", help="Generate Robocopy-friendly buckets", action="store_true")
     parser.add_argument("-a", "--aggregate_type", default='capacity', required=False, dest="agg_type", help="Split based on 'capacity' (default) or 'files'")
+    parser.add_argument("-s", "--snapshot", default=None, required=False, dest="snapshot_id", help="Specify a specific snapshot by numeric id")
     parser.add_argument("start_path", action="store", help="Path on the cluster for file info; Must be the last argument")
     args = parser.parse_args()
 
