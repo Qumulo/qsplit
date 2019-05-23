@@ -256,6 +256,7 @@ class QumuloFilesCommand(object):
                                             path=path, 
                                             snapshot=self.snap['id'] if self.snap is not None else None)
         except qumulo.lib.request.RequestError, excpt:
+            print(sys.exc_info())
             sys.exit(1)
 
         sz = int(result.data['total_capacity'])
@@ -270,7 +271,11 @@ class QumuloFilesCommand(object):
     def process_folder(self, path):
 
         try:
-            response = fs.read_entire_directory(self.connection, self.credentials, page_size=1000, path=path)
+            response = fs.read_entire_directory(self.connection, 
+                                                self.credentials, 
+                                                page_size=1000, 
+                                                path=path,
+                                                snapshot=self.snap['id'] if self.snap is not None else None)
         except Exception, excpt:
             print "Error in read_entire_directory: %s" % excpt
             sys.exit(1)
