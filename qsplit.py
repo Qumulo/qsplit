@@ -105,9 +105,9 @@ class Bucket:
         return self.free_space
 
     def print_contents(self):
-        print self.free_space, self.size
+        print('{}, {}'.format(self.free_space, self.size))
         for entry in self.entries:
-            print entry
+            print(entry)
 
         self.print_bucket_size()
 
@@ -119,10 +119,10 @@ class Bucket:
         for entry in self.entries:
             total_size += int(entry['size'])
 
-        print "Total data stored in bucket: " + str(total_size)
+        print("Total data stored in bucket: {}".format(str(total_size)))
         if total_size > self.size:
-            print "More data stored in bucket that initial size"
-            print "Overflow: " + str(total_size-self.size)
+            print("More data stored in bucket that initial size")
+            print("Overflow: " + str(total_size-self.size))
 
     def get_bucket_size(self):
         total_size = 0
@@ -171,8 +171,8 @@ class QumuloFilesCommand(object):
         self.max_bucket_size = self.total_size / self.num_buckets
 
         if self.verbose:
-            print "--------Total size: " + str(self.total_size) + " -------------"
-            print "--------Max Bucket size: " + str(self.max_bucket_size) + " -------------"
+            print("--------Total size: " + str(self.total_size) + " -------------")
+            print( "--------Max Bucket size: " + str(self.max_bucket_size) + " -------------")
 
         self.start_time = datetime.datetime.now()
 
@@ -196,8 +196,8 @@ class QumuloFilesCommand(object):
             self.credentials = qumulo.lib.auth.Credentials.\
                     from_login_response(login_results)
         except Exception, excpt:
-            print "Error connecting to the REST server: %s" % excpt
-            print __doc__
+            print("Error connecting to the REST server: {}".format(excpt))
+            print(__doc__)
             sys.exit(1)
 
     def create_buckets(self):
@@ -244,7 +244,7 @@ class QumuloFilesCommand(object):
             bucket.save(filename, len(self.start_path), self.robocopy)
 
             if self.verbose:
-                print "--------Dumping Bucket: " + str(i) + "-------------"
+                print("--------Dumping Bucket: " + str(i) + "-------------")
                 bucket.print_contents()
 
             bucket_num += 1
@@ -277,7 +277,7 @@ class QumuloFilesCommand(object):
                                                 path=path,
                                                 snapshot=self.snap['id'] if self.snap is not None else None)
         except Exception, excpt:
-            print "Error in read_entire_directory: %s" % excpt
+            print("Error in read_entire_directory: %s" % excpt)
             sys.exit(1)
 
         for r in response:
