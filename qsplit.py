@@ -195,7 +195,7 @@ class QumuloFilesCommand(object):
 
             self.credentials = qumulo.lib.auth.Credentials.\
                     from_login_response(login_results)
-        except Exception, excpt:
+        except Exception as excpt:
             print("Error connecting to the REST server: {}".format(excpt))
             print(__doc__)
             sys.exit(1)
@@ -255,7 +255,7 @@ class QumuloFilesCommand(object):
                                             self.credentials,
                                             path=path, 
                                             snapshot=self.snap['id'] if self.snap is not None else None)
-        except qumulo.lib.request.RequestError, excpt:
+        except qumulo.lib.request.RequestError as excpt:
             print(sys.exc_info())
             sys.exit(1)
 
@@ -276,7 +276,7 @@ class QumuloFilesCommand(object):
                                                 page_size=1000, 
                                                 path=path,
                                                 snapshot=self.snap['id'] if self.snap is not None else None)
-        except Exception, excpt:
+        except Exception as excpt:
             print("Error in read_entire_directory: %s" % excpt)
             sys.exit(1)
 
