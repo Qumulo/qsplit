@@ -1,4 +1,4 @@
-qumulo_api==2.6.10
+qumulo_api==4.0.0
 pylint>=1.4.4
 nose>=1.3.7
 arrow

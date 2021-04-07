@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2017 Qumulo, Inc. All rights reserved.
 #
 # NOTICE: All information and intellectual property contained herein is the
