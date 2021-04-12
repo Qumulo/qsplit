@@ -22,7 +22,7 @@ performance should be better for two reasons:
 3. Different client machines avoid burying the NIC and keep things busy and active.
 
 
-Example usage: `python qsplit.py --ip 192.168.1.88 -u admin -b 4 /media`
+Example usage: `python3 qsplit.py --ip 192.168.1.88 -u admin -b 4 /media`
 
 
 -----
@@ -40,7 +40,7 @@ from fs_read_dir_aggregates. (You can also specify partitioning using the argume
 
 As an example, I run the command like this:
 
-`python qsplit.py --ip 192.168.1.88 -b 4 /music`
+`python3 qsplit.py --ip 192.168.1.88 -b 4 /music`
 
 This will create four 'bucket files' for host '192.168.1.88' and path '/music': 
 a bucket is a list of filepaths using naming convention `split_bucket_[n].txt` 
@@ -71,14 +71,14 @@ qsplit.py now also offers a `--robocopy` (or `-r`) option for Windows
 environments which writes out file specs using backslashes rather 
 than forward slashes:
 
-`python qsplit.py -r --ip 192.168.1.88 -u admin -b 4 /media`
+`python3 qsplit.py -r --ip 192.168.1.88 -u admin -b 4 /media`
 
 
 -----
 
 # qsplit rsync only: Create manifest files for parallel copy using rsync
 
-Example usage: `python qsplit-rsync-only.py --host 192.168.1.88 -b 4 /music`
+Example usage: `python3 qsplit-rsync-only.py --host 192.168.1.88 -b 4 /music`
 
 This will create four files that can be used with a command like the following:
 

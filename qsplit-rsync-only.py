@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Copyright (c) 2017 Qumulo, Inc. All rights reserved.
 #
 # NOTICE: All information and intellectual property contained herein is the
@@ -177,8 +177,8 @@ class RestConnection(object):
         res = fs.read_dir_aggregates(self.connection, self.creds, path=path,
                                      order_by=QUERY_ORDER_BY[aggregate],
                                      max_entries=5000)
-        print "Read directory aggregates in %7.3f seconds at path %s" % (
-                time.time() - start, path)
+        print("Read directory aggregates in %7.3f seconds at path " % (
+                time.time() - start, path))
         return res
 
 
@@ -207,8 +207,8 @@ class Partitioner(object):
         return self.buckets[-1]
 
     def start(self, start_path):
-        print "Gathering data at %s for %d buckets" % (
-            start_path, self.num_buckets)
+        print("Gathering data at %s for %d buckets" % (
+            start_path, self.num_buckets))
 
         res = self.rest.get_aggregates(start_path, self.aggregate)
         total_size = int(res.data[DIR_AGGREGATE_KEY[self.aggregate]])
@@ -270,8 +270,8 @@ class Partitioner(object):
             filename = "%s-%03d.txt" % (filter_basename, i + 1)
             bucket.save(filename)
 
-            print "Output Filter %s size %12d / %d" % (
-                    filename, bucket.used(), bucket.size)
+            print("Output Filter %s size %12d / %d" % (
+                    filename, bucket.used(), bucket.size))
 
 
 def main():
