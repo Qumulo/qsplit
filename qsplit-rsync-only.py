@@ -177,7 +177,7 @@ class RestConnection(object):
         res = fs.read_dir_aggregates(self.connection, self.creds, path=path,
                                      order_by=QUERY_ORDER_BY[aggregate],
                                      max_entries=5000)
-        print("Read directory aggregates in %7.3f seconds at path " % (
+        print("Read directory aggregates in %7.3f seconds at path %s" % (
                 time.time() - start, path))
         return res
 
