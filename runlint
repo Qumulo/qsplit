@@ -7,4 +7,3 @@ function error()
 }
 
 find . -name "*.py" | xargs pylint --rcfile pylint.rc || error
-find . -name "*.js" -not -path "*./node_modules/*.js" -not -path "*./static/*.js" | xargs ./node_modules/jshint/bin/jshint --verbose || error

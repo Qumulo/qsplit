@@ -7,4 +7,3 @@ function error()
 }
 
 nosetests || error
-./node_modules/jasmine/bin/jasmine.js || error
