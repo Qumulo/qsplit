@@ -1,5 +1,0 @@
-#!/bin/bash
-
-curl -L https://npmjs.org/install.sh | sh
-pip install -r requirements.txt
-npm install
