@@ -156,7 +156,7 @@ class Filter(object):
     def save(self, filename):
         with open(filename, 'w') as bucket_file:
             for entry in self.entries:
-                bucket_file.write(entry.encode('utf8') + '\n')
+                bucket_file.write(entry.encode('utf8') + b'\n')
 
 class RestConnection(object):
     def __init__(self, host, port, user, password, creds_store):
